@@ -33,6 +33,8 @@ namespace NsqSharp.Bus.Configuration
         private readonly bool _preCreateTopicsAndChannels;
         private readonly IMessageMutator _messageMutator;
         private readonly IMessageTopicRouter _messageTopicRouter;
+        private readonly string _nsqdHttpAddress;
+        private readonly string _nsqdTcpAddress;
         private readonly INsqdPublisher _nsqdPublisher;
 
         private NsqBus _bus;
@@ -41,31 +43,33 @@ namespace NsqSharp.Bus.Configuration
         /// Initializes a new instance of the <see cref="BusConfiguration"/> class.
         /// </summary>
         /// <param name="dependencyInjectionContainer">The DI container to use for this bus (required). See
-        /// <see cref="StructureMapObjectBuilder"/> for a default implementation.</param>
+        ///     <see cref="StructureMapObjectBuilder"/> for a default implementation.</param>
         /// <param name="defaultMessageSerializer">The default message serializer/deserializer. See
-        /// <see cref="NewtonsoftJsonSerializer" /> for a default implementation.</param>
+        ///     <see cref="NewtonsoftJsonSerializer" /> for a default implementation.</param>
         /// <param name="messageAuditor">The handler to call when a message fails to process.</param>
         /// <param name="messageTypeToTopicProvider">The message type to topic provider.</param>
         /// <param name="handlerTypeToChannelProvider">The handler type to channel provider.</param>
         /// <param name="defaultNsqLookupdHttpEndpoints">The default nsqlookupd HTTP endpoints; typically listening
-        /// on port 4161.</param>
+        ///     on port 4161.</param>
         /// <param name="defaultThreadsPerHandler">The default number of threads per message handler.</param>
         /// <param name="nsqConfig">The NSQ <see cref="Config"/> (optional).</param>
         /// <param name="busStateChangedHandler">Handle bus start and stop events (optional).</param>
         /// <param name="nsqLogger">The <see cref="ILogger"/> used by NsqSharp when communicating with nsqd/nsqlookupd.
-        /// (default = <see cref="TraceLogger"/>).</param>
+        ///     (default = <see cref="TraceLogger"/>).</param>
         /// <param name="preCreateTopicsAndChannels">Set to <c>true</c> to pre-create all registered topics and channels
-        /// on the local nsqd instance listening on 127.0.0.1:4151; useful for self-contained clusters (default =
-        /// <c>false</c>).</param>
+        ///     on the local nsqd instance listening on 127.0.0.1:4151; useful for self-contained clusters (default =
+        ///     <c>false</c>).</param>
         /// <param name="messageMutator">The message mutator used to modify a message before it's sent (optional).</param>
         /// <param name="messageTopicRouter">The message router used to specify custom message-to-topic routing logic; used
-        /// to override <paramref name="messageTypeToTopicProvider"/> (optional).</param>
+        ///     to override <paramref name="messageTypeToTopicProvider"/> (optional).</param>
         /// <param name="nsqdPublisher">The implementation responsible for handling <see cref="M:IBus.Send"/> calls (optional;
-        /// default = <see cref="NsqdTcpPublisher"/> using 127.0.0.1:4150 and the specified <paramref name="nsqLogger"/>
-        /// and <paramref name="nsqConfig"/>).</param>
+        ///     default = <see cref="NsqdTcpPublisher"/> using 127.0.0.1:4150 and the specified <paramref name="nsqLogger"/>
+        ///     and <paramref name="nsqConfig"/>).</param>
         /// <param name="logOnProcessCrash"><c>true</c> to log <see cref="E:AppDomain.CurrentDomain.UnhandledException" /> using
-        /// <paramref name="nsqLogger"/> (default = <c>true</c>).
+        ///     <paramref name="nsqLogger"/> (default = <c>true</c>).
         /// </param>
+        /// <param name="nsqdHttpAddress">The default Http Endpoint for nsqd</param>
+        /// <param name="nsqdTcpAddress">The default TCP Endpoint for nsqd</param>
         public BusConfiguration(
             IObjectBuilder dependencyInjectionContainer,
             IMessageSerializer defaultMessageSerializer,
@@ -81,7 +85,9 @@ namespace NsqSharp.Bus.Configuration
             IMessageMutator messageMutator = null,
             IMessageTopicRouter messageTopicRouter = null,
             INsqdPublisher nsqdPublisher = null,
-            bool logOnProcessCrash = true
+            bool logOnProcessCrash = true,
+            string nsqdHttpAddress = "127.0.0.1:4151",
+            string nsqdTcpAddress = "127.0.0.1:4150"
         )
         {
             _nsqLogger = nsqLogger ?? new TraceLogger();
@@ -122,7 +128,9 @@ namespace NsqSharp.Bus.Configuration
             _preCreateTopicsAndChannels = preCreateTopicsAndChannels;
             _messageMutator = messageMutator;
             _messageTopicRouter = messageTopicRouter;
-            _nsqdPublisher = nsqdPublisher ?? new NsqdTcpPublisher("127.0.0.1:4150", _nsqLogger, _nsqConfig);
+            _nsqdHttpAddress = nsqdHttpAddress;
+            _nsqdTcpAddress = nsqdTcpAddress;
+            _nsqdPublisher = nsqdPublisher ?? new NsqdTcpPublisher(_nsqdTcpAddress, _nsqLogger, _nsqConfig);
 
             var handlerTypes = _handlerTypeToChannelProvider.GetHandlerTypes();
             AddMessageHandlers(handlerTypes);
@@ -328,7 +336,7 @@ namespace NsqSharp.Bus.Configuration
             // TODO: apps, probably shouldn't be used in PROD. This needs to be thought through.
             if (_preCreateTopicsAndChannels)
             {
-                const string nsqdHttpAddress = "127.0.0.1:4151";
+                var nsqdHttpAddress = _nsqdHttpAddress;
                 var nsqdHttpClient = new NsqdHttpClient(nsqdHttpAddress, TimeSpan.FromSeconds(5));
 
                 var wg = new WaitGroup();
